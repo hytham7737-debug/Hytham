@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>المكتب القضائي الذكي - نسخة مستقرة</title>
+    <style>
+        :root { --primary: #1e3d59; --accent: #ff6e40; --expired: #95a5a6; --bg: #f4f7f6; --success: #28a745; }
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg); margin: 0; padding: 0; display: flex; justify-content: center; }
+        .app-container { width: 100%; max-width: 500px; background: white; min-height: 100vh; position: relative; box-shadow: 0 0 15px rgba(0,0,0,0.1); padding-bottom: 80px; }
+        .header { background: var(--primary); color: white; padding: 15px; text-align: center; font-size: 18px; font-weight: bold; position: sticky; top: 0; z-index: 100; }
+        .page { display: none; padding: 15px; animation: fadeIn 0.2s; }
+        .page.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .tools-row { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; }
+        .search-box { flex: 1; min-width: 200px; border: 2px solid var(--primary); border-radius: 8px; padding: 8px; background: #fff; }
+        .search-box input { border: none; outline: none; width: 100%; font-family: inherit; }
+        .btn-export-sm { padding: 8px 12px; background: var(--success); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: bold; }
+        input, select, textarea, button { width: 100%; padding: 12px; margin-bottom: 12px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit; }
+        .btn-main { background: var(--accent); color: white; border: none; font-weight: bold; cursor: pointer; font-size: 16px; }
+        .btn-sec { background: var(--primary); color: white; border: none; font-weight: bold; cursor: pointer; }
+        .btn-notif { background: #2ecc71; color: white; border: none; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .task-card { background: #fff; border: 1px solid #e1e8ed; border-radius: 8px; padding: 12px; margin-bottom: 12px; border-right: 5px solid var(--primary); position: relative; }
+        .is-expired { border-right-color: var(--expired); opacity: 0.7; background: #f9f9f9; }
+        .expired-label { position: absolute; top: 5px; left: 5px; background: var(--expired); color: white; font-size: 10px; padding: 2px 5px; border-radius: 3px; }
+        .task-title { font-size: 15px; font-weight: bold; color: var(--primary); margin-bottom: 5px; }
+        .task-info-grid { font-size: 11px; color: #444; background: #f8f9fa; padding: 8px; border-radius: 4px; display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+        .task-note { font-size: 11px; color: #666; font-style: italic; border-top: 1px solid #eee; margin-top: 8px; padding-top: 5px; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: flex-end; }
+        .modal-content { background: white; width: 100%; max-width: 500px; border-radius: 15px 15px 0 0; padding: 20px; max-height: 80vh; overflow-y: auto; }
+        .case-item { padding: 10px; border: 1px solid #eee; margin-bottom: 8px; border-radius: 8px; cursor: pointer; background: #fcfcfc; }
+        .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 500px; background: var(--primary); display: flex; padding: 8px 0; border-top: 2px solid var(--accent); }
+        .nav-item { color: white; text-align: center; flex: 1; cursor: pointer; font-size: 11px; display: flex; flex-direction: column; align-items: center; }
+        .nav-item.active { color: var(--accent); font-weight: bold; }
+        .alert-box { background: #fff3cd; color: #856404; padding: 8px; border-right: 4px solid #ffc107; margin-bottom: 10px; border-radius: 4px; font-size: 12px; }
+        .upcoming-col h5 { text-align:center; background:#eee; padding:5px; border-radius:4px; margin-top:0; font-size:12px; margin-bottom:10px; }
+        .install-banner { background: var(--primary); color: white; text-align: center; padding: 8px; font-size: 12px; cursor: pointer; display: none; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div class="install-banner" id="installBanner" onclick="installApp()">📲 ثبّت التطبيق للعمل بدون إنترنت وإشعارات خلفية</div>
+    <div class="header" id="headerTitle">إضافة مهمة</div>
+
+    <!-- صفحة الإضافة -->
+    <div id="page-add" class="page active">
+        <button class="btn-notif" onclick="requestNotificationPermission()">🔔 تفعيل الإشعارات</button>
+        <div id="notificationsArea"></div>
+        <input type="text" id="titleInput" placeholder="عنوان الموعد (مثال: جلسة مرافعة)">
+        <select id="typeInput">
+            <option value="موعد">موعد قضائي</option>
+            <option value="مهمة">مهمة إدارية</option>
+            <option value="قرار">قرار/أمر تنفيذي</option>
+        </select>
+        <input type="date" id="dateInput">
+        <input type="text" id="caseNumInput" placeholder="رقم القضية">
+        <input type="text" id="defendantInput" placeholder="اسم المتهم / الخصم">
+        <input type="text" id="victimInput" placeholder="اسم المجني عليه">
+        <input type="text" id="chargeInput" placeholder="التهمة / موضوع القضية">
+        <textarea id="noteInput" placeholder="ملاحظات إضافية..."></textarea>
+        <button class="btn-main" onclick="addTask()">💾 حفظ في الجدول</button>
+    </div>
+
+    <!-- صفحة القائمة -->
+    <div id="page-list" class="page">
+        <div class="tools-row">
+            <div class="search-box"><input type="text" id="searchInput" onkeyup="filterTasks()" placeholder="🔍 بحث..."></div>
+            <button class="btn-export-sm" onclick="exportToCSV('all')">📎 تصدير الكل</button>
+        </div>
+        <div id="taskList"></div>
+    </div>
+
+    <!-- صفحة المواعيد القريبة -->
+    <div id="page-upcoming" class="page">
+        <div class="tools-row">
+            <button class="btn-export-sm" onclick="exportToCSV('tomorrow')">📎 تصدير غد</button>
+            <button class="btn-export-sm" style="background:var(--primary);" onclick="exportToCSV('after_tomorrow')">📎 تصدير بعد غد</button>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <div class="upcoming-col" style="flex:1;"><h5>📅 غداً</h5><div id="tomorrowTasks"></div></div>
+            <div class="upcoming-col" style="flex:1;"><h5>📅 بعد غد</h5><div id="dayAfterTasks"></div></div>
+        </div>
+    </div>
+
+    <!-- صفحة الحاسبة -->
+    <div id="page-calc" class="page">
+        <h3>🧮 حاسبة المواعيد القانونية</h3>
+        <input type="text" id="calcTitleInput" placeholder="اسم الموعد (اختياري)">
+        <label>📅 تاريخ البداية:</label>
+        <input type="date" id="startDateCalc">
+        <label>⏱️ المدة بالأيام (شاملة البداية):</label>
+        <input type="number" id="daysCountCalc" placeholder="مثال: 30">
+        <button class="btn-main" onclick="calculateDeadline()">🧮 احسب الموعد النهائي</button>
+        <div id="calcResult" style="display:none; margin-top:15px; text-align:center; background:#eef2f3; padding:15px; border-radius:8px;">
+            <p>📌 تاريخ الانتهاء:</p>
+            <h2 id="finalDateText" style="color:#d9534f; margin:5px 0;"></h2>
+            <button class="btn-sec" onclick="openCasePicker()">➕ إضافة وربط بقضية</button>
+        </div>
+    </div>
+
+    <!-- نافذة اختيار القضية -->
+    <div id="casePickerModal" class="modal">
+        <div class="modal-content">
+            <h3>ربط الموعد ببيانات سابقة</h3>
+            <textarea id="calcNoteInput" placeholder="ملاحظات إضافية..."></textarea>
+            <button class="btn-main" onclick="saveAsIndependent()">📌 حفظ كموعد مستقل</button>
+            <div style="font-weight:bold; margin:15px 0 10px;">أو اختر قضية لنسخ بياناتها:</div>
+            <div id="existingCasesList"></div>
+            <button class="btn-sec" onclick="closeModal()">إلغاء</button>
+        </div>
+    </div>
+
+    <!-- القائمة السفلية -->
+    <div class="bottom-nav">
+        <div class="nav-item active" id="nav-add" onclick="switchPage('page-add','إضافة مهمة','nav-add')"><span>➕</span><span>إضافة</span></div>
+        <div class="nav-item" id="nav-list" onclick="switchPage('page-list','الأرشيف','nav-list')"><span>📋</span><span>القائمة</span></div>
+        <div class="nav-item" id="nav-upcoming" onclick="switchPage('page-upcoming','المواعيد القريبة','nav-upcoming')"><span>⏳</span><span>القادم</span></div>
+        <div class="nav-item" id="nav-calc" onclick="switchPage('page-calc','الحاسبة القانونية','nav-calc')"><span>🧮</span><span>الحاسبة</span></div>
+    </div>
+</div>
+
+<script>
+    // ---------- البيانات الأساسية ----------
+    let tasks = JSON.parse(localStorage.getItem('judicialTasksFinal')) || [];
+    let tempCalculatedDate = "";
+
+    // ---------- دوال التنقل بين الصفحات ----------
+    function switchPage(pageId, title, navId) {
+        document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+        document.getElementById(pageId).classList.add('active');
+        document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+        document.getElementById(navId).classList.add('active');
+        document.getElementById('headerTitle').innerText = title;
+        renderAll();
+    }
+
+    // ---------- إضافة مهمة جديدة ----------
+    function addTask() {
+        const title = document.getElementById('titleInput').value.trim();
+        const date = document.getElementById('dateInput').value;
+        if (!title || !date) {
+            alert("الرجاء إدخال العنوان والتاريخ");
+            return;
+        }
+        const newTask = {
+            id: Date.now(),
+            title: title,
+            date: date,
+            type: document.getElementById('typeInput').value,
+            caseNum: document.getElementById('caseNumInput').value.trim() || "-",
+            defendant: document.getElementById('defendantInput').value.trim() || "-",
+            victim: document.getElementById('victimInput').value.trim() || "-",
+            charge: document.getElementById('chargeInput').value.trim() || "-",
+            note: document.getElementById('noteInput').value.trim() || ""
+        };
+        tasks.push(newTask);
+        saveAndRender();
+        document.getElementById('titleInput').value = '';
+        document.getElementById('dateInput').value = '';
+        document.getElementById('caseNumInput').value = '';
+        document.getElementById('defendantInput').value = '';
+        document.getElementById('victimInput').value = '';
+        document.getElementById('chargeInput').value = '';
+        document.getElementById('noteInput').value = '';
+        alert("تم حفظ الموعد بنجاح");
+        checkAndSendImmediateNotification(newTask);
+    }
+
+    function checkAndSendImmediateNotification(task) {
+        if (Notification.permission !== 'granted') return;
+        const today = new Date().setHours(0,0,0,0);
+        const taskDate = new Date(task.date).setHours(0,0,0,0);
+        const diff = Math.ceil((taskDate - today) / 86400000);
+        if (diff === 1 || diff === 2) {
+            new Notification("تذكير قضائي فوري", {
+                body: `الموعد "${task.title}" بعد ${diff} يوم (${task.date})`,
+                dir: 'rtl'
+            });
+        }
+    }
+
+    // ---------- الحاسبة ----------
+    function calculateDeadline() {
+        const startDate = document.getElementById('startDateCalc').value;
+        const days = parseInt(document.getElementById('daysCountCalc').value);
+        if (!startDate || isNaN(days)) {
+            alert("يرجى إدخال تاريخ البداية والمدة بالأيام");
+            return;
+        }
+        const resultDate = new Date(startDate);
+        resultDate.setDate(resultDate.getDate() + days - 1);
+        tempCalculatedDate = resultDate.toISOString().split('T')[0];
+        document.getElementById('finalDateText').innerText = tempCalculatedDate;
+        document.getElementById('calcResult').style.display = 'block';
+    }
+
+    function openCasePicker() {
+        const listDiv = document.getElementById('existingCasesList');
+        listDiv.innerHTML = "";
+        const uniqueCases = [];
+        const seen = new Set();
+        [...tasks].reverse().forEach(t => {
+            if (t.caseNum !== "-" && !seen.has(t.caseNum)) {
+                uniqueCases.push(t);
+                seen.add(t.caseNum);
+            }
+        });
+        if (uniqueCases.length === 0) {
+            listDiv.innerHTML = "<p style='color:gray;'>لا توجد قضايا سابقة لعرضها</p>";
+        } else {
+            uniqueCases.forEach(c => {
+                const div = document.createElement('div');
+                div.className = 'case-item';
+                div.innerHTML = `<strong>رقم: ${escapeHtml(c.caseNum)}</strong><br><small>${escapeHtml(c.charge)} | المتهم: ${escapeHtml(c.defendant)}</small>`;
+                div.onclick = () => addTaskFromCalc(c);
+                listDiv.appendChild(div);
+            });
+        }
+        document.getElementById('casePickerModal').style.display = 'flex';
+    }
+
+    function saveAsIndependent() {
+        addTaskFromCalc(null);
+    }
+
+    function addTaskFromCalc(selectedCase) {
+        const calcTitle = document.getElementById('calcTitleInput').value.trim() || "موعد محسوب";
+        const note = document.getElementById('calcNoteInput').value.trim() || "تم حسابه بواسطة الحاسبة";
+        const newTask = {
+            id: Date.now(),
+            title: calcTitle,
+            date: tempCalculatedDate,
+            type: "موعد",
+            caseNum: selectedCase ? selectedCase.caseNum : "-",
+            defendant: selectedCase ? selectedCase.defendant : "-",
+            victim: selectedCase ? selectedCase.victim : "-",
+            charge: selectedCase ? selectedCase.charge : "-",
+            note: note
+        };
+        tasks.push(newTask);
+        saveAndRender();
+        closeModal();
+        alert("تم إضافة الموعد المحسوب إلى القائمة");
+        checkAndSendImmediateNotification(newTask);
+        switchPage('page-list', 'الأرشيف', 'nav-list');
+    }
+
+    function closeModal() {
+        document.getElementById('casePickerModal').style.display = 'none';
+    }
+
+    // ---------- حفظ وعرض البيانات ----------
+    function saveAndRender() {
+        tasks.sort((a,b) => new Date(a.date) - new Date(b.date));
+        localStorage.setItem('judicialTasksFinal', JSON.stringify(tasks));
+        renderAll();
+    }
+
+    function renderAll() {
+        const taskListDiv = document.getElementById('taskList');
+        const tomorrowDiv = document.getElementById('tomorrowTasks');
+        const afterTomorrowDiv = document.getElementById('dayAfterTasks');
+        const notifArea = document.getElementById('notificationsArea');
+        if (taskListDiv) taskListDiv.innerHTML = '';
+        if (tomorrowDiv) tomorrowDiv.innerHTML = '';
+        if (afterTomorrowDiv) afterTomorrowDiv.innerHTML = '';
+        if (notifArea) notifArea.innerHTML = '';
+        
+        const today = new Date().setHours(0,0,0,0);
+        
+        tasks.forEach(task => {
+            const taskDate = new Date(task.date).setHours(0,0,0,0);
+            const diff = Math.ceil((taskDate - today) / 86400000);
+            const isExpired = taskDate < today;
+            
+            const cardHtml = `
+                <div class="task-card ${isExpired ? 'is-expired' : ''}">
+                    ${isExpired ? '<span class="expired-label">منقضٍ</span>' : ''}
+                    <div class="task-title">${escapeHtml(task.title)}</div>
+                    <div style="font-size:12px; margin-bottom:5px;">📅 ${task.date}</div>
+                    <div class="task-info-grid">
+                        <span>رقم: ${escapeHtml(task.caseNum)}</span>
+                        <span>التهمة: ${escapeHtml(task.charge)}</span>
+                        <span>المتهم: ${escapeHtml(task.defendant)}</span>
+                        <span>المجني عليه: ${escapeHtml(task.victim)}</span>
+                    </div>
+                    ${task.note ? `<div class="task-note">📝 ${escapeHtml(task.note)}</div>` : ''}
+                    <button onclick="deleteTask(${task.id})" style="width:auto; padding:4px 12px; margin-top:8px; background:#d9534f; color:white; border:none; border-radius:4px; cursor:pointer;">🗑 حذف</button>
+                </div>
+            `;
+            
+            if (taskListDiv) taskListDiv.innerHTML += cardHtml;
+            
+            if (!isExpired) {
+                if (diff === 1 && tomorrowDiv) tomorrowDiv.innerHTML += cardHtml;
+                if (diff === 2 && afterTomorrowDiv) afterTomorrowDiv.innerHTML += cardHtml;
+                if ((diff === 1 || diff === 2) && notifArea) {
+                    notifArea.innerHTML += `<div class="alert-box">⚠️ موعد ${diff===1 ? 'غداً' : 'بعد غد'}: ${escapeHtml(task.title)} (${task.date})</div>`;
+                }
+            }
+        });
+        
+        if (tomorrowDiv && tomorrowDiv.innerHTML === '') tomorrowDiv.innerHTML = '<p style="text-align:center; color:#999; font-size:12px;">لا توجد مواعيد لغد</p>';
+        if (afterTomorrowDiv && afterTomorrowDiv.innerHTML === '') afterTomorrowDiv.innerHTML = '<p style="text-align:center; color:#999; font-size:12px;">لا توجد مواعيد لبعد غد</p>';
+    }
+
+    function deleteTask(id) {
+        if (confirm("هل أنت متأكد من حذف هذا الموعد نهائياً؟")) {
+            tasks = tasks.filter(t => t.id !== id);
+            saveAndRender();
+        }
+    }
+
+    function filterTasks() {
+        const keyword = document.getElementById('searchInput').value.toLowerCase();
+        const cards = document.querySelectorAll('#taskList .task-card');
+        cards.forEach(card => {
+            const text = card.innerText.toLowerCase();
+            card.style.display = text.includes(keyword) ? 'block' : 'none';
+        });
+    }
+
+    // ---------- تصدير CSV (أزرار منفصلة تماماً) ----------
+    function exportToCSV(type) {
+        let filteredTasks = [];
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        if (type === 'all') {
+            filteredTasks = tasks;
+        } 
+        else if (type === 'tomorrow') {
+            // تاريخ الغد = اليوم + 1
+            const tomorrowDate = new Date(today);
+            tomorrowDate.setDate(today.getDate() + 1);
+            const tomorrowStr = tomorrowDate.toISOString().split('T')[0];
+            filteredTasks = tasks.filter(t => t.date === tomorrowStr);
+        } 
+        else if (type === 'after_tomorrow') {
+            // تاريخ بعد غد = اليوم + 2
+            const afterTomorrowDate = new Date(today);
+            afterTomorrowDate.setDate(today.getDate() + 2);
+            const afterTomorrowStr = afterTomorrowDate.toISOString().split('T')[0];
+            filteredTasks = tasks.filter(t => t.date === afterTomorrowStr);
+        }
+        
+        // إذا لم توجد بيانات، لا نصدّر أي شيء ونعرض رسالة (يمكنك إزالة alert إذا أردت الصمت)
+        if (filteredTasks.length === 0) {
+            alert(`لا توجد مواعيد ${type === 'tomorrow' ? 'لغد' : (type === 'after_tomorrow' ? 'لبعد غد' : 'للتصدير')}`);
+            return;
+        }
+        
+        // إنشاء ملف CSV
+        let csvRows = [["العنوان","التاريخ","النوع","رقم القضية","التهمة","المتهم","المجني عليه","الملاحظات"]];
+        for (let t of filteredTasks) {
+            csvRows.push([
+                t.title, t.date, t.type, t.caseNum, t.charge, t.defendant, t.victim, t.note
+            ]);
+        }
+        const csvContent = "\uFEFF" + csvRows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.setAttribute("download", `قضايا_${type}_${new Date().toLocaleDateString()}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+
+    // ---------- إشعارات الهاتف ----------
+    function requestNotificationPermission() {
+        if (!("Notification" in window)) {
+            alert("المتصفح لا يدعم الإشعارات");
+            return;
+        }
+        Notification.requestPermission().then(perm => {
+            if (perm === "granted") {
+                alert("تم تفعيل الإشعارات بنجاح! ستصل إليك تلقائياً للمواعيد القريبة.");
+                document.querySelector('.btn-notif').style.display = 'none';
+                new Notification("تم التفعيل", { body: "سيتم تذكيرك قبل المواعيد بيوم ويومين", dir: 'rtl' });
+            } else {
+                alert("لم يتم منح إذن الإشعارات");
+            }
+        });
+    }
+
+    function checkDailyNotifications() {
+        if (Notification.permission !== 'granted') return;
+        const today = new Date().setHours(0,0,0,0);
+        tasks.forEach(task => {
+            const taskDate = new Date(task.date).setHours(0,0,0,0);
+            const diff = Math.ceil((taskDate - today) / 86400000);
+            if (diff === 1 || diff === 2) {
+                new Notification(`⚖️ تذكير: ${task.title}`, {
+                    body: `التاريخ: ${task.date} | رقم القضية: ${task.caseNum}`,
+                    dir: 'rtl'
+                });
+            }
+        });
+    }
+
+    // ---------- دعم PWA والتثبيت ----------
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        document.getElementById('installBanner').style.display = 'block';
+    });
+    function installApp() {
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then(() => {
+                document.getElementById('installBanner').style.display = 'none';
+            });
+        } else {
+            alert("يمكنك تثبيت التطبيق من قائمة المتصفح (أضف إلى الشاشة الرئيسية)");
+        }
+    }
+
+    // Service Worker بسيط للتخزين المؤقت
+    if ('serviceWorker' in navigator) {
+        const swCode = `self.addEventListener('fetch', event => event.respondWith(fetch(event.request).catch(() => caches.match(event.request))));`;
+        const blob = new Blob([swCode], {type: 'application/javascript'});
+        const url = URL.createObjectURL(blob);
+        navigator.serviceWorker.register(url);
+    }
+
+    // تهيئة الصفحة
+    window.onload = () => {
+        renderAll();
+        if (Notification.permission === "granted") {
+            document.querySelector('.btn-notif').style.display = 'none';
+            checkDailyNotifications();
+        }
+        // مزامنة مع IndexedDB (اختياري)
+        try {
+            const request = indexedDB.open('judicial_tasks_db', 1);
+            request.onupgradeneeded = () => request.result.createObjectStore('tasks', { keyPath: 'id' });
+            request.onsuccess = () => {
+                const db = request.result;
+                const tx = db.transaction('tasks', 'readwrite');
+                const store = tx.objectStore('tasks');
+                store.clear();
+                tasks.forEach(t => store.put(t));
+                tx.oncomplete = () => db.close();
+            };
+        } catch(e) {}
+    };
+
+    function escapeHtml(str) {
+        return String(str).replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+</script>
+</body>
+</html>
